@@ -1,40 +1,38 @@
+#include <LiquidCrystal.h>
 #include "DHT.h"
-#include <Wire.h>
-#include <Adafruit_Sensor.h>
-#include <Adafruit_BMP085.h>
 
-#define DHTPIN 2  
+#define DHTPIN 11  
 #define DHTTYPE DHT11
-
-Adafruit_BMP085 bmp;
-
 DHT dht(DHTPIN, DHTTYPE);
 
-const int ledPin1 = 8;
+const int ledPin1 = 12;
 const int buttonPin1 = 13;
 
 int button1Counter = 0;
 int button1State = 0;
 int lastButton1State = 0;
-
 boolean readingOn = false;
+unsigned long lastRefreshTime = 0;
+float humidity;
+float temperature;
+int moisture;
 
+LiquidCrystal lcd(1, 2, 4, 5, 6, 7);
+int runXTimesRead = 1;
+int runXTimesReset = 1;
 
-void setup() {
-  Serial.begin(9600); 
-  Serial.println("Starting reading...");
- 
-  pinMode(ledPin1, OUTPUT);
-  pinMode(buttonPin1, OUTPUT);http:
+void setup() {  
+  lcd.begin(16, 2);
+  defaultDisplayState();
+  resetResetCounter();
   
+  pinMode(ledPin1, OUTPUT);
+  pinMode(buttonPin1, OUTPUT);
+
   dht.begin();
-  bmp.begin();
 }
 
-
-void loop() {
-  
-   // read the state of the pushbutton value:
+void loop() {  
   button1State = digitalRead(buttonPin1);
 
   if(button1State != lastButton1State) {
@@ -47,53 +45,76 @@ void loop() {
   if (button1Counter % 4 == 0) {
     digitalWrite(ledPin1, HIGH);
     readingOn = true;
-  } else {
+  } 
+  else {
     digitalWrite(ledPin1, LOW);
     readingOn = false;
   }
-  
+
   if(!readingOn) {
     startReading();
+    printTemperatureAndHumidity();
+    readMoisture();
   }
 }
 
-void startReading() {
 
+//----------- Helper methods ----------------//
+void startReading() {
   // Reading temperature or humidity takes about 250 milliseconds!
   // Sensor readings may also be up to 2 seconds 'old' (its a very slow sensor)
-  float h = dht.readHumidity();
+  humidity = dht.readHumidity();
   // Read temperature as Celsius
-  float t = dht.readTemperature();
-  // Read temperature as Fahrenheit
-  float f = dht.readTemperature(true);
-  
-  // Check if any reads failed and exit early (to try again).
-  if (isnan(h) || isnan(t) || isnan(f)) {
+  temperature = dht.readTemperature();
+
+  if (isnan(humidity) || isnan(temperature)) {
     Serial.println("Failed to read from DHT sensor!");
     return;
-  }
-
-  // Compute heat index
-  // Must send in temp in Fahrenheit!
-  float hi = dht.computeHeatIndex(f, h);
-  
-
-  Serial.print("Humidity: "); 
-  Serial.print(h);
-  Serial.print(" %\t");
-  Serial.print("Temperature: "); 
-  Serial.print(t);
-  Serial.println(" *C ");
-  
-  readPressure();
+  } 
 }
 
-void readPressure() {
-  Serial.print("Pressure = ");
-  Serial.print(bmp.readPressure());
-  Serial.println(" Pa");
-  
-  Serial.print("Temperature = ");
-  Serial.print(bmp.readTemperature());
-  Serial.println(" *C");
+
+
+void readMoisture() {
+  moisture = analogRead(0); 
 }
+
+void printTemperatureAndHumidity() {
+  String resultTemp = String((long) temperature, DEC) + "*C";
+  String resultHum  = String((long) humidity, DEC) + "%h";
+  String resultMoist = String(moisture);
+  
+  lcd.setCursor(0, 0);
+  lcd.print("Reading data...");
+  lcd.setCursor(0, 1);
+  lcd.print(resultTemp);
+  lcd.setCursor(5, 1);
+  lcd.print(resultHum);
+  lcd.setCursor(10, 1);
+  lcd.print(resultMoist);
+}
+
+void preReadState() {
+  if (runXTimesRead) {
+    lcd.clear();
+    lcd.noBlink();
+    runXTimesRead--;
+   }
+}
+
+void defaultDisplayState() {
+  if (runXTimesReset) {
+    lcd.print("press button...");
+    lcd.blink();
+    runXTimesReset--;
+   }
+}
+
+void resetReadCounter() {
+  runXTimesRead = 1;
+}
+
+void resetResetCounter() {
+  runXTimesReset = 1;
+}
+
